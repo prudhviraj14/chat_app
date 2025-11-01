@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Chat Platform</title>
+    <link rel="stylesheet" href="/public/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="auth-container">
+            <h1>Welcome to Chat Platform</h1>
+            <div class="auth-buttons">
+                <button onclick="navigateTo('login')" class="btn btn-primary">Login</button>
+                <button onclick="navigateTo('register')" class="btn btn-secondary">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function navigateTo(page) {
+            window.location.href = `/public/${page}.html`;
+        }
+    </script>
+</body>
+</html>
