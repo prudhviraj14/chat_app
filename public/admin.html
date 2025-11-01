@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Chat Platform</title>
+    <link rel="stylesheet" href="/public/css/style.css">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="sidebar-header">
+            <h1>Admin Panel</h1>
+            <div class="user-info">
+                <span id="adminUser"></span>
+                <button onclick="logout()" class="btn btn-small">Logout</button>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>Users Management</h2>
+            <table class="data-table" id="usersTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Created At</th>
+                        <th>Admin</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="admin-section">
+            <h2>All Messages</h2>
+            <table class="data-table" id="messagesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Sender</th>
+                        <th>Receiver</th>
+                        <th>Message</th>
+                        <th>File</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="admin-section">
+            <h2>Feedback & Issues</h2>
+            <table class="data-table" id="feedbackTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                        <th>Timestamp</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const userData = localStorage.getItem('user');
+            if (!userData) {
+                window.location.href = '/public/login.html';
+                return;
+            }
+
+            const user = JSON.parse(userData);
+            if (!user.isAdmin) {
+                window.location.href = '/public/chat.html';
+                return;
+            }
+
+            document.getElementById('adminUser').textContent = `Admin: ${user.username}`;
+            await loadAdminData();
+        });
+
+        async function loadAdminData() {
+            try {
+                const response = await fetch('/api/admin/data');
+                if (response.status === 401) {
+                    window.location.href = '/public/login.html';
+                    return;
+                }
+
+                const data = await response.json();
+                populateTable('usersTable', data.users);
+                populateTable('messagesTable', data.messages);
+                populateTable('feedbackTable', data.feedback);
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+            }
+        }
+
+        function populateTable(tableId, data) {
+            const table = document.getElementById(tableId);
+            const tbody = table.querySelector('tbody');
+            tbody.innerHTML = '';
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                
+                Object.values(item).forEach(value => {
+                    const cell = document.createElement('td');
+                    cell.textContent = value || '-';
+                    row.appendChild(cell);
+                });
+
+                tbody.appendChild(row);
+            });
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                localStorage.removeItem('user');
+                window.location.href = '/public/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Refresh data every 30 seconds
+        setInterval(loadAdminData, 30000);
+    </script>
+</body>
+</html>
