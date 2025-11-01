@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Chat Platform</title>
+    <link rel="stylesheet" href="/public/css/style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-sidebar">
+            <div class="sidebar-header">
+                <h3>Chat Platform</h3>
+                <div class="user-info">
+                    <span id="currentUser"></span>
+                    <button onclick="logout()" class="btn btn-small">Logout</button>
+                </div>
+            </div>
+            
+            <div class="sidebar-menu">
+                <button onclick="showSection('chat')" class="menu-btn active">Chat</button>
+                <button onclick="showSection('feedback')" class="menu-btn">Feedback</button>
+            </div>
+
+            <div class="users-list">
+                <h4>Online Users</h4>
+                <div id="usersContainer"></div>
+            </div>
+        </div>
+
+        <div class="chat-main">
+            <!-- Chat Section -->
+            <div id="chatSection" class="section active">
+                <div class="chat-header">
+                    <h3 id="chatWithUser">Select a user to chat</h3>
+                </div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input">
+                    <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+                    <input type="file" id="fileInput" style="display: none;">
+                    <button onclick="document.getElementById('fileInput').click()" class="btn btn-small">📎</button>
+                    <button onclick="sendMessage()" class="btn btn-primary" disabled>Send</button>
+                </div>
+            </div>
+
+            <!-- Feedback Section -->
+            <div id="feedbackSection" class="section">
+                <div class="feedback-container">
+                    <h3>Submit Feedback or Report Issue</h3>
+                    <form id="feedbackForm">
+                        <div class="form-group">
+                            <label for="feedbackType">Type:</label>
+                            <select id="feedbackType" name="type" required>
+                                <option value="feedback">Feedback</option>
+                                <option value="issue">Issue Report</option>
+                                <option value="bug">Bug Report</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="feedbackMessage">Message:</label>
+                            <textarea id="feedbackMessage" name="message" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let selectedUser = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const userData = localStorage.getItem('user');
+            if (!userData) {
+                window.location.href = '/public/login.html';
+                return;
+            }
+
+            currentUser = JSON.parse(userData);
+            document.getElementById('currentUser').textContent = currentUser.username;
+
+            await loadUsers();
+            setupEventListeners();
+        });
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                if (response.status === 401) {
+                    window.location.href = '/public/login.html';
+                    return;
+                }
+
+                const result = await response.json();
+                const usersContainer = document.getElementById('usersContainer');
+                usersContainer.innerHTML = '';
+
+                result.users.forEach(user => {
+                    if (user.id !== currentUser.id) {
+                        const userElement = document.createElement('div');
+                        userElement.className = 'user-item';
+                        userElement.innerHTML = `
+                            <span>${user.username}</span>
+                            <span class="user-email">${user.email}</span>
+                        `;
+                        userElement.onclick = () => selectUser(user);
+                        usersContainer.appendChild(userElement);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        function selectUser(user) {
+            selectedUser = user;
+            document.getElementById('chatWithUser').textContent = `Chat with ${user.username}`;
+            document.getElementById('messageInput').disabled = false;
+            document.querySelector('.chat-input button:last-child').disabled = false;
+            
+            loadMessages();
+        }
+
+        async function loadMessages() {
+            if (!selectedUser) return;
+
+            try {
+                const response = await fetch(`/api/messages?otherUserId=${selectedUser.id}`);
+                const result = await response.json();
+
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.innerHTML = '';
+
+                result.messages.forEach(message => {
+                    const messageElement = document.createElement('div');
+                    messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
+                    
+                    let messageContent = message.message;
+                    if (message.fileUrl) {
+                        messageContent = `<a href="${message.fileUrl}" download>📎 ${message.fileUrl.split('/').pop()}</a>`;
+                    }
+
+                    messageElement.innerHTML = `
+                        <div class="message-content">${messageContent}</div>
+                        <div class="message-time">${message.timestamp}</div>
+                    `;
+                    messagesContainer.appendChild(messageElement);
+                });
+
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const fileInput = document.getElementById('fileInput');
+            const message = messageInput.value.trim();
+
+            if (!message && !fileInput.files[0]) return;
+
+            let fileUrl = null;
+
+            // Handle file upload
+            if (fileInput.files[0]) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    try {
+                        const response = await fetch('/api/upload', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                fileName: file.name,
+                                fileData: e.target.result.split(',')[1],
+                                fileType: file.type
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (response.ok) {
+                            fileUrl = result.fileUrl;
+                            sendMessageToServer(message, fileUrl);
+                        }
+                    } catch (error) {
+                        console.error('File upload failed:', error);
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+            } else {
+                sendMessageToServer(message, null);
+            }
+
+            messageInput.value = '';
+            fileInput.value = '';
+        }
+
+        async function sendMessageToServer(message, fileUrl) {
+            try {
+                const response = await fetch('/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        receiverId: selectedUser.id,
+                        message: message,
+                        fileUrl: fileUrl
+                    })
+                });
+
+                if (response.ok) {
+                    loadMessages();
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        }
+
+        function showSection(section) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(section + 'Section').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function setupEventListeners() {
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData);
+
+                try {
+                    const response = await fetch('/api/feedback', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (response.ok) {
+                        alert('Feedback submitted successfully!');
+                        e.target.reset();
+                    } else {
+                        alert('Failed to submit feedback.');
+                    }
+                } catch (error) {
+                    alert('Error submitting feedback.');
+                }
+            });
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                localStorage.removeItem('user');
+                window.location.href = '/public/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Poll for new messages
+        setInterval(() => {
+            if (selectedUser) {
+                loadMessages();
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
