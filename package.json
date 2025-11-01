@@ -1,0 +1,13 @@
+{
+  "name": "mini-chat-server",
+  "version": "1.0.0",
+  "description": "A mini HTTP chat server with authentication and file sharing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.7"
+  }
+}
